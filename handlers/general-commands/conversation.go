@@ -5,6 +5,7 @@ import (
 	tools "maquiaBot/tools"
 	"math/big"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 
 // Conversation creates a conversation based off of quotes
 func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
-	convoRegex, _ := regexp.Compile(`(?i)(convo?|conversation)?\s+(\d+)`)
+	convoRegex, _ := regexp.Compile(`(?i)(convo?|conversation)?\s+(.+)?(\d+)?`)
 	linkRegex, _ := regexp.Compile(`(?i)(https://www|https://|www)\S+`)
 
 	// Get server
@@ -38,22 +39,66 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	if strings.Contains(m.Content, "-i") {
-		excludeLinks = false
-	}
+	// Get the username
+	user := &discordgo.User{}
+	username := ""
+	userQuotes := serverData.Quotes
+	//number := 0
+	if convoRegex.MatchString(m.Content) {
+		username = convoRegex.FindStringSubmatch(m.Content)[2]
+		if discordUser, err := s.User(username); err == nil {
+			username = discordUser.Username
+			tools.ErrRead(s, err)
+		} else if len(m.Mentions) > 0 {
+			username = m.Mentions[0].Username
+		}
+		if len(strings.Split(username, " ")) > 1 {
+			if _, err = strconv.Atoi(strings.Split(username, " ")[1]); err == nil {
+				username = strings.Split(username, " ")[0]
+			}
+		}
+		// Get user
+		members, _ := s.GuildMembers(m.GuildID, "", 1000)
+		sort.Slice(members, func(i, j int) bool {
+			time1, _ := members[i].JoinedAt.Parse()
+			time2, _ := members[j].JoinedAt.Parse()
+			return time1.Unix() < time2.Unix()
+		})
+		for _, member := range members {
+			s.ChannelMessageSend(m.ChannelID, "the hoes: " + member.User.Username)
+			if strings.HasPrefix(strings.ToLower(member.User.Username), strings.ToLower(username)) || strings.HasPrefix(strings.ToLower(member.Nick), strings.ToLower(username)) {
+				user, _ = s.User(member.User.ID)
+				break
+			}
+		}
 
-	if num > len(serverData.Quotes) {
-		s.ChannelMessageSend(m.ChannelID, "You don't have enough quotes in the server! Please see `help quoteadd` to see how to add quotes!")
-		return
+		if user.ID == "" {
+			s.ChannelMessageSend(m.ChannelID, "No user with the name **"+username+"** found!")
+			return
+		}
+
+		userQuotes = []discordgo.Message{}
+		for _, quote := range serverData.Quotes {
+			if quote.Author.ID == user.ID {
+				userQuotes = append(userQuotes, quote)
+			}
+		}
+		if len(userQuotes) == 0 {
+			s.ChannelMessageSend(m.ChannelID, "No quotes saved for **"+user.Username+"**! Please see `help quoteadd` to see how to add quotes!")
+			return
+		}
 	}
+	
+
+	
 
 	// Create the Convo .
 	convo := []string{}
 	for i := 0; i < num; i++ {
-		roll, _ := rand.Int(rand.Reader, big.NewInt(int64(len(serverData.Quotes))))
+		roll, _ := rand.Int(rand.Reader, big.NewInt(int64(len(userQuotes))))
 		j := roll.Int64()
-		if len(serverData.Quotes[j].Attachments) <= 0 || excludeLinks {
-			text := serverData.Quotes[j].ContentWithMentionsReplaced()
+		if len(userQuotes[j].Attachments) <= 0 || excludeLinks {
+			text := userQuotes[j].ContentWithMentionsReplaced()
 			if linkRegex.MatchString(text) {
 				text = strings.TrimSpace(linkRegex.ReplaceAllString(text, ""))
 			}
@@ -61,9 +106,9 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 				i--
 				continue
 			}
-			convo = append(convo, "**"+serverData.Quotes[j].Author.Username+"**: "+serverData.Quotes[j].ContentWithMentionsReplaced())
-		} else if len(serverData.Quotes[j].Attachments) > 0 {
-			convo = append(convo, "**"+serverData.Quotes[j].Author.Username+"**: "+serverData.Quotes[j].ContentWithMentionsReplaced()+" "+serverData.Quotes[j].Attachments[0].URL)
+			convo = append(convo, "**"+userQuotes[j].Author.Username+"**: "+userQuotes[j].ContentWithMentionsReplaced())
+		} else if len(userQuotes[j].Attachments) > 0 {
+			convo = append(convo, "**"+userQuotes[j].Author.Username+"**: "+userQuotes[j].ContentWithMentionsReplaced()+" "+userQuotes[j].Attachments[0].URL)
 		} else {
 			i--
 			continue
