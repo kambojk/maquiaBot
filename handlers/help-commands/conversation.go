@@ -7,8 +7,12 @@ import (
 // Conversation explains the conversation functionality
 func Conversation(embed *discordgo.MessageEmbed) *discordgo.MessageEmbed {
 	embed.Author.Name = "Command: conv / convo / conversation"
-	embed.Description = "`(conv|convo|conversation) [num] [-i]` provides a conversation based on quotes stored for the server"
+	embed.Description = "`(conv|convo|conversation) (@mentions|username) [num] [-i]` provides a conversation based on quotes stored for the server"
 	embed.Fields = []*discordgo.MessageEmbedField{
+		{
+			Name:  "(@mentions|username)",
+			Value: "Mention / provide their username / ID to have the conversation command use only their quotes.",
+		},
 		{
 			Name:   "[num]",
 			Value:  "The number of people to add.",
