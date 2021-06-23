@@ -29,22 +29,14 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Get number of quotes and if links should be removed
-	num := 2
-	excludeLinks := true
-	if convoRegex.MatchString(m.Content) {
-		num, err = strconv.Atoi(convoRegex.FindStringSubmatch(m.Content)[2])
-		if err != nil || num < 2 {
-			num = 2
-		}
-	}
-
-	// Get the username
+	// Get number of quotes and if links should be removed and username
 	user := &discordgo.User{}
 	username := ""
 	userQuotes := serverData.Quotes
-	//number := 0
+	num := 2
+	excludeLinks := true
 	if convoRegex.MatchString(m.Content) {
+
 		username = convoRegex.FindStringSubmatch(m.Content)[2]
 		if discordUser, err := s.User(username); err == nil {
 			username = discordUser.Username
@@ -52,12 +44,16 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 		} else if len(m.Mentions) > 0 {
 			username = m.Mentions[0].Username
 		}
+
 		if len(strings.Split(username, " ")) > 1 {
-			if _, err = strconv.Atoi(strings.Split(username, " ")[1]); err == nil {
+			if num, err = strconv.Atoi(strings.Split(username, " ")[1]); err == nil {
 				username = strings.Split(username, " ")[0]
+			} else {
+				num = 2
 			}
 		}
 		// Get user
+		
 		members, _ := s.GuildMembers(m.GuildID, "", 1000)
 		sort.Slice(members, func(i, j int) bool {
 			time1, _ := members[i].JoinedAt.Parse()
@@ -65,7 +61,6 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return time1.Unix() < time2.Unix()
 		})
 		for _, member := range members {
-			s.ChannelMessageSend(m.ChannelID, "the hoes: " + member.User.Username)
 			if strings.HasPrefix(strings.ToLower(member.User.Username), strings.ToLower(username)) || strings.HasPrefix(strings.ToLower(member.Nick), strings.ToLower(username)) {
 				user, _ = s.User(member.User.ID)
 				break
@@ -88,13 +83,12 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 	}
-	
-
-	
-
 	// Create the Convo .
 	convo := []string{}
 	for i := 0; i < num; i++ {
+		if len(userQuotes) == 0 {
+			break
+		}
 		roll, _ := rand.Int(rand.Reader, big.NewInt(int64(len(userQuotes))))
 		j := roll.Int64()
 		if len(userQuotes[j].Attachments) <= 0 || excludeLinks {
@@ -107,8 +101,10 @@ func Conversation(s *discordgo.Session, m *discordgo.MessageCreate) {
 				continue
 			}
 			convo = append(convo, "**"+userQuotes[j].Author.Username+"**: "+userQuotes[j].ContentWithMentionsReplaced())
+			userQuotes = append(userQuotes[:j],userQuotes[j+1:]...)
 		} else if len(userQuotes[j].Attachments) > 0 {
 			convo = append(convo, "**"+userQuotes[j].Author.Username+"**: "+userQuotes[j].ContentWithMentionsReplaced()+" "+userQuotes[j].Attachments[0].URL)
+			userQuotes = append(userQuotes[:j],userQuotes[j+1:]...)
 		} else {
 			i--
 			continue
